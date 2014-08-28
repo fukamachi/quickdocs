@@ -16,7 +16,9 @@
                 :map-parallel
                 :print-progress
                 :run-in-process
-                :pandoc-readme)
+                :pandoc-readme
+                :org2html-readme
+                :plain-readme)
   (:import-from :quickdocs.parser
                 :parse-documentation)
   (:import-from :quickdocs.parser.util
@@ -41,26 +43,45 @@
           :homepage_url (project-homepage release)
           :repos_url (repos-url (ql-dist:project-name release))
           :archive_url (ql-dist::archive-url release)))
+  (insert-readme))
+
+@export
+(defun insert-readme (db release)
   (let* ((project-id (getf (select-one db :id
-                             (from :project)
-                             (where (:and (:= :ql_dist_version (ql-dist:version (slot-value release 'ql-dist:dist)))
-                                          (:= :name (ql-dist:project-name release))))
-                             (limit 1))
+                                       (from :project)
+                                       (where (:and (:= :ql_dist_version (ql-dist:version (slot-value release 'ql-dist:dist)))
+                                                    (:= :name (ql-dist:project-name release))))
+                                       (limit 1))
                            :|id|))
          (readme-files (find-readme release))
          (readme (and readme-files
                       (loop for file in readme-files
-                            for content = (handler-case (slurp-file file)
-                                            (flex:external-format-encoding-error ()
-                                              nil))
-                            when content
+                         for content = (handler-case (slurp-file file)
+                                         (flex:external-format-encoding-error ()
+                                           nil))
+                         when content
                               do (return (cons file content))))))
-    (when readme
+    (when (and readme project-id)
+      (delete-from db :project_readme
+                   (where (:= :project_id project-id)))
       (insert-into db :project_readme
         (set= :project_id project-id
               :filename (pathname-name (car readme))
               :raw (cdr readme)
-              :converted (pandoc-readme (car readme)))))))
+              :converted (let* ((file (car readme))
+                                (type (pathname-type file)))
+                           (cond
+                             ((or (null type)
+                                  (string= "txt" type)
+                                  (string= "text" type))
+                              (plain-readme file))
+                             ((or (string= "markdown" type)
+                                  (string= "md" type))
+                              (pandoc-readme file))
+                             ((string= "org" type)
+                              (org2html-readme file))
+                             (t
+                              (plain-readme file)))))))))
 
 @export
 (defmethod insert-record (db (ql-system ql-dist:system) &key project-id system-info)
@@ -127,6 +148,22 @@
      #'(lambda (release)
          (print-progress (ql-dist:project-name release))
          (handler-case (insert-release db release)
+           (error (e)
+             (format *error-output* "~&~A~%" e)
+             (push (ql-dist:project-name release) error-releases))))
+     (ql-dist:provided-releases (ql-dist:dist "quicklisp")))
+
+    (format t "~3&Error releases:~%~{ - ~A~^~%~}~%" (reverse error-releases))))
+
+@export
+(defun update-dist-readme-database (db &optional (dist-version
+                                                  (ql-dist:version (ql-dist:dist "quicklisp"))))
+  (use-dist-version dist-version)
+  (let (error-releases)
+    (map-parallel
+     #'(lambda (release)
+         (print-progress (ql-dist:project-name release))
+         (handler-case (insert-readme db release)
            (error (e)
              (format *error-output* "~&~A~%" e)
              (push (ql-dist:project-name release) error-releases))))

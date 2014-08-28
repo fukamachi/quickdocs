@@ -51,6 +51,10 @@
    (connect-db)
    (ql-dist:find-release release-name)))
 
+(defun update-project-readme-database (&optional (dist-version
+                                           (ql-dist:version (ql-dist:dist "quicklisp"))))
+  (quickdocs.updater.project:update-dist-readme-database (connect-db) dist-version))
+
 (defun update-project-database (&optional (dist-version
                                            (ql-dist:version (ql-dist:dist "quicklisp"))))
   (quickdocs.updater.project:update-dist-database (connect-db) dist-version))
