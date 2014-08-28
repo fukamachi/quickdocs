@@ -1,0 +1,8 @@
+#!/bin/sh -
+# export as HTML with
+#  3       ... render as html headline with org headline level within  3
+#  nil     ... no override of settings
+#  'string ... return string instead of creating a html file
+#  t       ... export body only
+"$1" -Q -batch --file "$2" --eval "(setq org-export-with-toc nil)" --eval "(princ (org-export-as-html 3 nil 'string t))" 2> /dev/null
+
