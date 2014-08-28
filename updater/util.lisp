@@ -6,7 +6,8 @@
                 :with-output-to-sequence)
   (:import-from :alexandria
                 :copy-stream
-                :with-gensyms)
+                :with-gensyms
+                :read-file-into-string)
   (:import-from :lparallel.kernel
                 :*kernel*
                 :make-channel
@@ -78,9 +79,28 @@
 ;;
 ;; README
 
+;; for plain text
+(defun plain-readme (file)
+  (concatenate 'string "<pre>" (read-file-into-string file) "</pre>"))
+
+;; for markdown
 (defparameter *pandoc-path* "pandoc")
 
 (defun pandoc-readme (file)
   (with-output-to-string (s)
     (sb-ext:run-program "/bin/sh" `("-c" ,(format nil "timeout 10 ~A ~A" *pandoc-path* file))
+                        :output s)))
+
+;; for org-mode
+(defparameter *emacs-path* "/usr/bin/emacs")
+(defun org2html-readme (file)
+  (with-output-to-string (s)
+    (sb-ext:run-program "/bin/sh" `("-c" ,(format nil "timeout 10 bin/org2html ~A ~A " *emacs-path* file))
+                        :output s)))
+
+;; for reStructuredText
+(defparameter *rst2html-path* "rst2html.py")
+(defun rst2html-readme (file)
+  (with-output-to-string (s)
+    (sb-ext:run-program "/bin/sh" `("-c" ,(format nil "timeout 10 ~A ~A" *rst2html-path* file))
                         :output s)))
